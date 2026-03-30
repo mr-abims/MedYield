@@ -4,39 +4,8 @@
   <p align="center">
     A privacy-preserving health data marketplace powered by Fully Homomorphic Encryption on Fhenix.
   </p>
-  <p align="center">
-    <a href="https://cofhe-docs.fhenix.zone">Fhenix Docs</a> · <a href="https://www.fhenix.io">Fhenix Website</a> · <a href="https://docs.reineira.xyz">ReineiraOS Docs</a>
-  </p>
+
 </p>
-
----
-
-## Table of Contents
-
-- [Overview](#overview)
-- [The Problem](#the-problem)
-- [The Solution](#the-solution)
-- [Why FHE](#why-fhe)
-- [Why Fhenix](#why-fhenix)
-- [How It Works](#how-it-works)
-- [Architecture](#architecture)
-  - [System Overview](#system-overview)
-  - [Smart Contract Architecture](#smart-contract-architecture)
-  - [Data Flow](#data-flow)
-  - [Payment Flow](#payment-flow)
-- [Technical Details](#technical-details)
-  - [Encrypted Data Types](#encrypted-data-types)
-  - [FHE Operations](#fhe-operations)
-  - [Access Control Model](#access-control-model)
-  - [Computation Templates](#computation-templates)
-- [Security Model](#security-model)
-- [Business Model](#business-model)
-- [Regulatory Alignment](#regulatory-alignment)
-- [Tech Stack](#tech-stack)
-- [Project Status](#project-status)
-- [Getting Started](#getting-started)
-- [Project Structure](#project-structure)
-- [Roadmap](#roadmap)
 
 ---
 
@@ -84,9 +53,7 @@ Traditional encryption protects data at rest and in transit, but data must be de
 MedYield introduces a **request-centric** model built on the **factory pattern**:
 
 1. An organization deploys a DataVault through MedYieldHub, configured with their specific data schema, pricing, valid ranges, and stablecoin escrow funded via ReineiraOS.
-
 2. Users browse active DataVault bounties, encrypt their health data client-side in the format each vault demands, and submit. If the encrypted data passes on-chain range validation, the user is paid immediately through ReineiraOS's escrow release mechanism.
-
 3. When enough submissions arrive, the organization triggers computation. Aggregate results are computed on encrypted data via CoFHE and delivered to the organization. Individual records stay encrypted permanently.
 
 Organizations define what they need. Users respond. Data never leaves encryption. Everyone gets paid fairly.
@@ -132,7 +99,7 @@ Fhenix is the only blockchain infrastructure that provides the complete set of c
 
 ### For organizations
 
-```
+```yaml
 1. Connect wallet to MedYield
 2. Define your data schema:
    - Field names (age, blood_pressure, glucose_level, etc.)
@@ -150,7 +117,7 @@ Fhenix is the only blockchain infrastructure that provides the complete set of c
 
 ### For users
 
-```
+```yaml
 1. Connect wallet to MedYield
 2. Browse active data bounties
 3. Pick a bounty — see exactly what fields are requested and what it pays
@@ -167,7 +134,7 @@ Fhenix is the only blockchain infrastructure that provides the complete set of c
 
 ### System overview
 
-```
+```md
 +-------------------------------------------------------------+
 |                         FRONTEND                             |
 |  React + Viem + cofhejs                                      |
@@ -238,7 +205,7 @@ Fhenix is the only blockchain infrastructure that provides the complete set of c
 
 ### Data flow
 
-```
+```md
 User's Browser                     DataVault                CoFHE
      |                                |                       |
      |  1. Enter health data          |                       |
@@ -293,7 +260,7 @@ Organization                       DataVault                CoFHE
 
 ### Payment flow
 
-```
+```md
 Organization                    ReineiraOS                 DataVault
      |                              |                         |
      |  1. Fund bounty escrow       |                         |
@@ -364,7 +331,7 @@ These are examples. Each DataVault defines its own schema with the specific fiel
 
 MedYield's access control maps directly to the concept of informed consent in clinical research:
 
-```
+```sql
 Patient encrypts data in browser
      |
      v
@@ -445,7 +412,7 @@ MedYield inherits Fhenix's trust model:
 
 ### The flywheel
 
-```
+```sql
 More users contributing encrypted data
         |
         v
@@ -508,67 +475,10 @@ The core protocol contracts (MedYieldHub, DataVault, TemplateRegistry) and the f
 
 ---
 
-## Getting Started
-
-### Prerequisites
-
-- Node.js v18+
-- npm
-- Foundry (forge, cast, anvil)
-
-### Installation
-
-```bash
-git clone https://github.com/mr-abims/MedYield.git
-cd medyield
-
-# Install dependencies
-npm install
-
-# Compile contracts
-forge build
-
-# Run tests
-forge test -vvv
-
-# Run tests with gas reporting
-forge test -vvv --gas-report
-```
-
----
-
-## Project Structure
-
-```
-medyield/
-├── src/
-│   ├── core/
-│   │   ├── MedYieldHub.sol          # Factory — deploys vaults, manages templates, coordinates escrow
-│   │   └── DataVault.sol            # Per-bounty instance — submissions, validation, computation, lifecycle
-│   ├── modules/
-│   │   └── DataValidator.sol        # Encrypted range validation via FHE comparisons
-│   ├── templates/
-│   │   ├── AggregateStats.sol       # Sum, count, min, max across a cohort
-│   │   ├── EligibilityScreen.sol    # Multi-criteria screening, returns eligible count
-│   │   └── RiskScoring.sol          # Composite weighted health risk index
-│   └── Counter.sol                  # FHE proof-of-concept (Phase 1)
-├── test/
-│   └── Counter.t.sol                # FHE test suite (Phase 1)
-├── script/
-│   ├── DeployCounter.s.sol
-│   ├── IncrementCounter.s.sol
-│   └── ResetCounter.s.sol
-├── foundry.toml
-├── remappings.txt
-├── package.json
-└── README.md
-```
-
----
-
 ## Roadmap
 
 ### Phase 1: Research, Architecture and Proof of Concept (Current)
+
 - [x] Problem validation and market research ($47B health data market, patient compensation gap, privacy barriers)
 - [x] FHE technology evaluation — compared ZK proofs, TEEs, MPC, and FHE; selected Fhenix CoFHE for encrypted computation with EVM compatibility
 - [x] ReineiraOS evaluation — selected as escrow and stablecoin payment infrastructure to avoid building custom payment rails
@@ -581,6 +491,7 @@ medyield/
 - [x] Design documentation and technical specification
 
 ### Phase 2: Core Contracts
+
 - [ ] **MedYieldHub** — Factory contract modeled after Uniswap's factory pattern; includes the template registry for managing approved computation templates; deploys and registers DataVault instances; coordinates escrow funding through ReineiraOS
 - [ ] **Computation templates** — AggregateStats (sum, count, min, max), EligibilityScreen (multi-field criteria matching, eligible count), RiskScoring (composite weighted index); registered in MedYieldHub, selected and configured by organizations at vault creation
 - [ ] **DataValidator** — Encrypted range validation module; runs FHE.gte / FHE.lte on every submitted field against the schema's min/max bounds; decrypts only the boolean result, never the data
@@ -590,6 +501,7 @@ medyield/
 - [ ] Integration tests covering the full flow: vault creation, escrow funding, data submission, validation, payment release, computation trigger, and refund
 
 ### Phase 3: Frontend
+
 - [ ] React project setup with Viem and cofhejs
 - [ ] Wallet connection (MetaMask / WalletConnect)
 - [ ] **User marketplace** — Browse active bounties, view schema requirements and payout per record, filter by field type or payout
@@ -599,6 +511,7 @@ medyield/
 - [ ] **Results viewer** — Display decrypted aggregate outputs (stats, eligibility counts, risk scores) for the organization
 
 ### Phase 4: Testing and Testnet Deployment
+
 - [ ] End-to-end testing across contracts and frontend with mock FHE environment
 - [ ] Gas profiling for FHE operations per template type
 - [ ] Deploy contracts to EVM testnet
@@ -606,6 +519,7 @@ medyield/
 - [ ] Subgraph indexer for bounty discovery and submission tracking
 
 ### Phase 5: Optimization and Hardening
+
 - [ ] Gas optimization for FHE-heavy operations
 - [ ] Chunked batch execution for computation on large datasets
 - [ ] Additional computation templates (longitudinal analysis, population health)
@@ -613,17 +527,12 @@ medyield/
 - [ ] FHIR-compatible schema definitions for healthcare interoperability
 
 ### Phase 6: Production
+
 - [ ] Mainnet deployment
 - [ ] Production stablecoin integration via ReineiraOS
 - [ ] Enterprise API for bulk bounty management
 - [ ] Mobile submission interface
 - [ ] Regulatory compliance documentation
-
----
-
-## License
-
-MIT
 
 ---
 
