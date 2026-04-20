@@ -1,21 +1,19 @@
 {
-  "name": "cofhe-foundry-starter",
+  "name": "medyield",
   "version": "0.1.0",
-  "description": "Starter template for Fhenix CoFHE smart contract development using Foundry",
+  "private": true,
+  "description": "MedYield monorepo — Foundry contracts + Next.js frontend.",
   "license": "MIT",
   "scripts": {
-    "build": "forge build",
-    "test": "forge test -vvv",
-    "test:gas": "forge test -vvv --gas-report",
-    "clean": "forge clean",
-    "deploy:eth-sepolia": "source .env && forge script script/DeployCounter.s.sol --rpc-url eth-sepolia --broadcast --verify",
-    "deploy:arb-sepolia": "source .env && forge script script/DeployCounter.s.sol --rpc-url arb-sepolia --broadcast --verify",
-    "deploy:base-sepolia": "source .env && forge script script/DeployCounter.s.sol --rpc-url base-sepolia --broadcast --verify"
+    "build": "pnpm --filter @medyield/foundry build && pnpm --filter @medyield/nextjs build",
+    "dev": "pnpm --filter @medyield/nextjs dev",
+    "test": "pnpm --filter @medyield/foundry test",
+    "forge:build": "pnpm --filter @medyield/foundry build",
+    "wagmi:generate": "pnpm --filter @medyield/nextjs wagmi:generate",
+    "clean": "pnpm -r run clean && rm -rf node_modules"
   },
-  "devDependencies": {
-    "@cofhe/mock-contracts": "^0.4.0",
-    "@fhenixprotocol/cofhe-contracts": "^0.1.0",
-    "@openzeppelin/contracts": "^5.0.0",
-    "forge-std": "github:foundry-rs/forge-std"
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20"
   }
 }

@@ -1,16 +1,40 @@
-# Dependencies
+# Node / pnpm
 node_modules/
+.pnpm-store/
+*.log
 
 # Foundry
-out/
-cache/
-broadcast/
+packages/foundry/out/
+packages/foundry/cache/
+packages/foundry/broadcast/
+packages/foundry/deployments/
 
-# Environment
+# Next.js
+packages/nextjs/.next/
+packages/nextjs/out/
+packages/nextjs/dist/
+packages/nextjs/build/
+packages/nextjs/.turbo/
+
+# wagmi-cli generated artifacts
+packages/nextjs/src/generated.ts
+
+# Env
 .env
+.env.local
+.env.*.local
 
-# Deployments
-deployments/
-
-# OS
+# OS / IDE
 .DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Testing
+coverage/
+.nyc_output/
+
+# Misc
+*.tsbuildinfo

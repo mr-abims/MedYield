@@ -1,0 +1,12 @@
+[submodule "packages/foundry/lib/forge-std"]
+	path = packages/foundry/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+[submodule "packages/foundry/lib/openzeppelin-contracts"]
+	path = packages/foundry/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "packages/foundry/lib/cofhe-contracts"]
+	path = packages/foundry/lib/cofhe-contracts
+	url = https://github.com/FhenixProtocol/cofhe-contracts
+[submodule "packages/foundry/lib/cofhesdk"]
+	path = packages/foundry/lib/cofhesdk
+	url = https://github.com/FhenixProtocol/cofhesdk
