@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.25;
 
-import {Test} from "forge-std/Test.sol";
-import {CoFheTest} from "@cofhe/mock-contracts/foundry/CoFheTest.sol";
+import {CofheTest} from "@cofhe/foundry-plugin/CofheTest.sol";
+import {CofheClient} from "@cofhe/foundry-plugin/CofheClient.sol";
 import {FHE, euint32, ebool, InEuint32, InEbool} from "@fhenixprotocol/cofhe-contracts/FHE.sol";
 import {MedYieldHub} from "../../src/MedYieldHub.sol";
 import {TemplateRegistry} from "../../src/TemplateRegistry.sol";
@@ -21,11 +21,12 @@ import {
 /// @notice End-to-end lifecycle: deploy → register template → create bounty →
 ///         6 users submit → relayer confirms 5 valid + 1 invalid → org triggers →
 ///         batches → finalize → verify aggregates → publish + read results.
-contract FullFlowTest is Test, CoFheTest {
+contract FullFlowTest is CofheTest {
     MedYieldHub public hub;
     TemplateRegistry public registry;
     VaultDeployer public deployer;
     AggregateStats public aggTemplate;
+    CofheClient public client;
 
     address public admin;
     address public org;
@@ -41,6 +42,9 @@ contract FullFlowTest is Test, CoFheTest {
     uint32[6] public glucose = [uint32(90), 110, 100, 95, 130, 120];
 
     function setUp() public {
+        deployMocks();
+        client = createCofheClient();
+
         admin = makeAddr("admin");
         org = makeAddr("org");
         relayer = makeAddr("relayer");
@@ -87,29 +91,39 @@ contract FullFlowTest is Test, CoFheTest {
         vault = DataVault(record.vault);
     }
 
-    function _submit(address user, uint32 age, uint32 gluc) internal {
+    function _submit(uint256 i, uint32 age, uint32 gluc) internal {
+        client.connect(userKeys[i]);
         InEuint32[] memory nums = new InEuint32[](2);
-        nums[0] = createInEuint32(age, user);
-        nums[1] = createInEuint32(gluc, user);
+        nums[0] = client.createInEuint32(age);
+        nums[1] = client.createInEuint32(gluc);
         InEbool[] memory bools = new InEbool[](0);
-        vm.prank(user);
+        vm.prank(users[i]);
         vault.submitData(nums, bools);
+    }
+
+    function _signResult(uint256 resultIndex, uint32 plaintext) internal view returns (bytes memory) {
+        uint256 ctHash = uint256(euint32.unwrap(vault.results(resultIndex)));
+        return mockThresholdNetworkSigner.signDecryptResult(ctHash, uint256(plaintext));
     }
 
     function test_FullLifecycle() public {
         // 1. Six submissions
         for (uint256 i = 0; i < 6; i++) {
-            _submit(users[i], ages[i], glucose[i]);
+            _submit(i, ages[i], glucose[i]);
         }
         assertEq(vault.submissionCount(), 6);
 
         // 2. Relayer confirms each. ages[5] = 200 is out of [1,130] so invalid.
-        vm.startPrank(relayer);
         for (uint256 i = 0; i < 6; i++) {
             bool valid = ages[i] <= 130;
-            vault.confirmSubmission(i, valid, "");
+            (, , , ebool isValid) = vault.submissions(i);
+            bytes memory sig = mockThresholdNetworkSigner.signDecryptResult(
+                uint256(ebool.unwrap(isValid)),
+                valid ? 1 : 0
+            );
+            vm.prank(relayer);
+            vault.confirmSubmission(i, valid, sig);
         }
-        vm.stopPrank();
 
         assertEq(vault.validatedCount(), 5);
 
@@ -146,15 +160,15 @@ contract FullFlowTest is Test, CoFheTest {
         uint32 maxGluc = 130;
         uint32 meanGluc = sumGluc / 5;                 // 105
 
-        vault.publishResult(0, sumAge, "");
-        vault.publishResult(1, minAge, "");
-        vault.publishResult(2, maxAge, "");
-        vault.publishResult(3, meanAge, "");
-        vault.publishResult(4, sumGluc, "");
-        vault.publishResult(5, minGluc, "");
-        vault.publishResult(6, maxGluc, "");
-        vault.publishResult(7, meanGluc, "");
-        vault.publishResult(8, 5, "");
+        vault.publishResult(0, sumAge, _signResult(0, sumAge));
+        vault.publishResult(1, minAge, _signResult(1, minAge));
+        vault.publishResult(2, maxAge, _signResult(2, maxAge));
+        vault.publishResult(3, meanAge, _signResult(3, meanAge));
+        vault.publishResult(4, sumGluc, _signResult(4, sumGluc));
+        vault.publishResult(5, minGluc, _signResult(5, minGluc));
+        vault.publishResult(6, maxGluc, _signResult(6, maxGluc));
+        vault.publishResult(7, meanGluc, _signResult(7, meanGluc));
+        vault.publishResult(8, 5, _signResult(8, 5));
 
         (uint32 v0, bool r0) = vault.getResult(0);
         assertTrue(r0);
@@ -178,8 +192,8 @@ contract FullFlowTest is Test, CoFheTest {
     ///         CANCELLED via live read.
     function test_OrgCancelMidFlow_HaltsEverything() public {
         // Two submissions arrive before the org closes the bounty.
-        _submit(users[0], ages[0], glucose[0]);
-        _submit(users[1], ages[1], glucose[1]);
+        _submit(0, ages[0], glucose[0]);
+        _submit(1, ages[1], glucose[1]);
 
         vm.prank(org);
         hub.closeBounty(bountyId);
@@ -188,9 +202,10 @@ contract FullFlowTest is Test, CoFheTest {
         assertEq(uint8(hub.getVault(bountyId).status), uint8(VaultStatus.CANCELLED));
 
         // Further submissions revert.
+        client.connect(userKeys[2]);
         InEuint32[] memory nums = new InEuint32[](2);
-        nums[0] = createInEuint32(ages[2], users[2]);
-        nums[1] = createInEuint32(glucose[2], users[2]);
+        nums[0] = client.createInEuint32(ages[2]);
+        nums[1] = client.createInEuint32(glucose[2]);
         InEbool[] memory bools = new InEbool[](0);
         vm.prank(users[2]);
         vm.expectRevert("Invalid vault status");

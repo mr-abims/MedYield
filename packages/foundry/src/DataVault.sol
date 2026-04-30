@@ -56,7 +56,7 @@ contract DataVault {
     VaultStatus public status;
     euint32[] internal accumulators;
     uint256 public batchCursor;
-    euint32[] internal results;
+    euint32[] public results;
 
     // --- Events ---
     event DataSubmitted(uint256 indexed submissionId, address indexed submitter);

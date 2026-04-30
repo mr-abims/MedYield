@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.25;
 
-import {Test} from "forge-std/Test.sol";
-import {CoFheTest} from "@cofhe/mock-contracts/foundry/CoFheTest.sol";
+import {CofheTest} from "@cofhe/foundry-plugin/CofheTest.sol";
 import {FHE, euint32, ebool} from "@fhenixprotocol/cofhe-contracts/FHE.sol";
 import {EligibilityScreening} from "../../src/templates/EligibilityScreening.sol";
 
-contract EligibilityScreeningTest is Test, CoFheTest {
+contract EligibilityScreeningTest is CofheTest {
     EligibilityScreening public template;
 
     function setUp() public {
+        deployMocks();
         template = new EligibilityScreening();
     }
 
@@ -66,8 +66,8 @@ contract EligibilityScreeningTest is Test, CoFheTest {
         euint32[] memory acc = template.initializeAccumulators(3, params);
 
         assertEq(acc.length, 2);
-        assertHashValue(acc[0], uint32(0));
-        assertHashValue(acc[1], uint32(0));
+        expectPlaintext(acc[0], uint32(0));
+        expectPlaintext(acc[1], uint32(0));
     }
 
     function test_RevertsOnNoCriteria() public {
@@ -98,8 +98,8 @@ contract EligibilityScreeningTest is Test, CoFheTest {
         euint32[] memory values = _fields3(25, 0, 0);
 
         acc = template.processSubmission(acc, values, _validBool(), params);
-        assertHashValue(acc[0], uint32(1));
-        assertHashValue(acc[1], uint32(1));
+        expectPlaintext(acc[0], uint32(1));
+        expectPlaintext(acc[1], uint32(1));
     }
 
     function test_GteCriterion_Miss() public {
@@ -108,8 +108,8 @@ contract EligibilityScreeningTest is Test, CoFheTest {
         euint32[] memory values = _fields3(15, 0, 0);
 
         acc = template.processSubmission(acc, values, _validBool(), params);
-        assertHashValue(acc[0], uint32(0));
-        assertHashValue(acc[1], uint32(1));
+        expectPlaintext(acc[0], uint32(0));
+        expectPlaintext(acc[1], uint32(1));
     }
 
     function test_LteCriterion_Match() public {
@@ -118,7 +118,7 @@ contract EligibilityScreeningTest is Test, CoFheTest {
         euint32[] memory values = _fields3(40, 0, 0);
 
         acc = template.processSubmission(acc, values, _validBool(), params);
-        assertHashValue(acc[0], uint32(1));
+        expectPlaintext(acc[0], uint32(1));
     }
 
     function test_EqCriterion_Match() public {
@@ -127,7 +127,7 @@ contract EligibilityScreeningTest is Test, CoFheTest {
         euint32[] memory values = _fields3(42, 0, 0);
 
         acc = template.processSubmission(acc, values, _validBool(), params);
-        assertHashValue(acc[0], uint32(1));
+        expectPlaintext(acc[0], uint32(1));
     }
 
     function test_EqCriterion_Miss() public {
@@ -136,7 +136,7 @@ contract EligibilityScreeningTest is Test, CoFheTest {
         euint32[] memory values = _fields3(41, 0, 0);
 
         acc = template.processSubmission(acc, values, _validBool(), params);
-        assertHashValue(acc[0], uint32(0));
+        expectPlaintext(acc[0], uint32(0));
     }
 
     // --- Multi-criteria ---
@@ -148,8 +148,8 @@ contract EligibilityScreeningTest is Test, CoFheTest {
 
         acc = template.processSubmission(acc, _fields3(30, 95, 0), _validBool(), params);
         acc = template.processSubmission(acc, _fields3(45, 80, 0), _validBool(), params);
-        assertHashValue(acc[0], uint32(2));
-        assertHashValue(acc[1], uint32(2));
+        expectPlaintext(acc[0], uint32(2));
+        expectPlaintext(acc[1], uint32(2));
     }
 
     function test_NoneEligible() public {
@@ -159,8 +159,8 @@ contract EligibilityScreeningTest is Test, CoFheTest {
 
         acc = template.processSubmission(acc, _fields3(15, 95, 0), _validBool(), params);
         acc = template.processSubmission(acc, _fields3(30, 150, 0), _validBool(), params);
-        assertHashValue(acc[0], uint32(0));
-        assertHashValue(acc[1], uint32(2));
+        expectPlaintext(acc[0], uint32(0));
+        expectPlaintext(acc[1], uint32(2));
     }
 
     function test_MixedEligibility() public {
@@ -171,8 +171,8 @@ contract EligibilityScreeningTest is Test, CoFheTest {
         acc = template.processSubmission(acc, _fields3(15, 95, 0), _validBool(), params);   // age miss
         acc = template.processSubmission(acc, _fields3(30, 150, 0), _validBool(), params);  // glucose miss
         acc = template.processSubmission(acc, _fields3(40, 80, 0), _validBool(), params);   // eligible
-        assertHashValue(acc[0], uint32(2));
-        assertHashValue(acc[1], uint32(4));
+        expectPlaintext(acc[0], uint32(2));
+        expectPlaintext(acc[1], uint32(4));
     }
 
     function test_InvalidSubmission_NotCounted() public {
@@ -180,8 +180,8 @@ contract EligibilityScreeningTest is Test, CoFheTest {
         euint32[] memory acc = template.initializeAccumulators(3, params);
 
         acc = template.processSubmission(acc, _fields3(30, 0, 0), _invalidBool(), params);
-        assertHashValue(acc[0], uint32(0));
-        assertHashValue(acc[1], uint32(0));
+        expectPlaintext(acc[0], uint32(0));
+        expectPlaintext(acc[1], uint32(0));
     }
 
     // --- Finalize ---
@@ -195,8 +195,8 @@ contract EligibilityScreeningTest is Test, CoFheTest {
         euint32 vc = acc[1];
         euint32[] memory results = template.finalize(acc, vc, params);
         assertEq(results.length, 2);
-        assertHashValue(results[0], uint32(2));
-        assertHashValue(results[1], uint32(2));
+        expectPlaintext(results[0], uint32(2));
+        expectPlaintext(results[1], uint32(2));
     }
 
     function test_ResultCount() public view {

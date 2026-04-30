@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.25;
 
-import {Test} from "forge-std/Test.sol";
-import {CoFheTest} from "@cofhe/mock-contracts/foundry/CoFheTest.sol";
+import {CofheTest} from "@cofhe/foundry-plugin/CofheTest.sol";
+import {CofheClient} from "@cofhe/foundry-plugin/CofheClient.sol";
 import {FHE, euint32, ebool, InEuint32, InEbool} from "@fhenixprotocol/cofhe-contracts/FHE.sol";
 import {DataVault} from "../src/DataVault.sol";
 import {AggregateStats} from "../src/templates/AggregateStats.sol";
@@ -16,20 +16,25 @@ import {
 /// @notice Verifies that a cancelled vault rejects every state-changing
 ///         entrypoint and that cancel() itself enforces one-shot semantics
 ///         and hub-only access.
-contract DataVaultCancelTest is Test, CoFheTest {
+contract DataVaultCancelTest is CofheTest {
     DataVault public vault;
     AggregateStats public aggTemplate;
+    CofheClient public client;
 
     address public org;
     address public user;
+    uint256 public userKey;
     address public relayer;
     address public hub; // this contract stands in as the hub
 
     function onComputationComplete(uint256) external {}
 
     function setUp() public {
+        deployMocks();
+        client = createCofheClient();
+
         org = makeAddr("org");
-        user = makeAddr("user");
+        (user, userKey) = makeAddrAndKey("user");
         relayer = makeAddr("relayer");
         hub = address(this);
 
@@ -56,11 +61,22 @@ contract DataVaultCancelTest is Test, CoFheTest {
 
     function _submit(uint32 age) internal returns (uint256 subId) {
         subId = vault.submissionCount();
+        client.connect(userKey);
         InEuint32[] memory nums = new InEuint32[](1);
-        nums[0] = createInEuint32(age, user);
+        nums[0] = client.createInEuint32(age);
         InEbool[] memory bools = new InEbool[](0);
         vm.prank(user);
         vault.submitData(nums, bools);
+    }
+
+    function _confirm(uint256 subId, bool valid) internal {
+        (, , , ebool isValid) = vault.submissions(subId);
+        bytes memory sig = mockThresholdNetworkSigner.signDecryptResult(
+            uint256(ebool.unwrap(isValid)),
+            valid ? 1 : 0
+        );
+        vm.prank(relayer);
+        vault.confirmSubmission(subId, valid, sig);
     }
 
     // --- access control on cancel() ---
@@ -87,8 +103,9 @@ contract DataVaultCancelTest is Test, CoFheTest {
     function test_SubmitDataRevertsAfterCancel() public {
         vault.cancel();
 
+        client.connect(userKey);
         InEuint32[] memory nums = new InEuint32[](1);
-        nums[0] = createInEuint32(45, user);
+        nums[0] = client.createInEuint32(45);
         InEbool[] memory bools = new InEbool[](0);
 
         vm.prank(user);
@@ -120,10 +137,8 @@ contract DataVaultCancelTest is Test, CoFheTest {
     function test_CancelAllowedDuringComputing() public {
         uint256 s0 = _submit(45);
         uint256 s1 = _submit(50);
-        vm.prank(relayer);
-        vault.confirmSubmission(s0, true, "");
-        vm.prank(relayer);
-        vault.confirmSubmission(s1, true, "");
+        _confirm(s0, true);
+        _confirm(s1, true);
 
         vm.prank(org);
         vault.triggerComputation();
@@ -136,10 +151,8 @@ contract DataVaultCancelTest is Test, CoFheTest {
     function test_CancelRevertsAfterCompleted() public {
         uint256 s0 = _submit(45);
         uint256 s1 = _submit(50);
-        vm.prank(relayer);
-        vault.confirmSubmission(s0, true, "");
-        vm.prank(relayer);
-        vault.confirmSubmission(s1, true, "");
+        _confirm(s0, true);
+        _confirm(s1, true);
 
         vm.prank(org);
         vault.triggerComputation();

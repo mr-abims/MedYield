@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.25;
 
-import {Test} from "forge-std/Test.sol";
-import {CoFheTest} from "@cofhe/mock-contracts/foundry/CoFheTest.sol";
+import {CofheTest} from "@cofhe/foundry-plugin/CofheTest.sol";
 import {MedYieldHub} from "../src/MedYieldHub.sol";
 import {IMedYieldHub} from "../src/interfaces/IMedYieldHub.sol";
 import {TemplateRegistry} from "../src/TemplateRegistry.sol";
@@ -18,7 +17,7 @@ import {
     VaultRecord
 } from "../src/libraries/HealthDataSchema.sol";
 
-contract MedYieldHubTest is Test, CoFheTest {
+contract MedYieldHubTest is CofheTest {
     MedYieldHub public hub;
     TemplateRegistry public registry;
     VaultDeployer public deployer;
@@ -32,6 +31,7 @@ contract MedYieldHubTest is Test, CoFheTest {
     uint256 public aggregateStatsTemplateId;
 
     function setUp() public {
+        deployMocks();
         admin = makeAddr("admin");
         org = makeAddr("org");
         outsider = makeAddr("outsider");

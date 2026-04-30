@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.25;
 
-import {Test} from "forge-std/Test.sol";
-import {CoFheTest} from "@cofhe/mock-contracts/foundry/CoFheTest.sol";
+import {CofheTest} from "@cofhe/foundry-plugin/CofheTest.sol";
 import {FHE, euint32, ebool} from "@fhenixprotocol/cofhe-contracts/FHE.sol";
 import {AggregateStats} from "../../src/templates/AggregateStats.sol";
 
-contract AggregateStatsTest is Test, CoFheTest {
+contract AggregateStatsTest is CofheTest {
     AggregateStats public template;
 
     bytes public singleFieldParams;
     bytes public multiFieldParams;
 
     function setUp() public {
+        deployMocks();
         template = new AggregateStats();
 
         uint256[] memory singleTarget = new uint256[](1);
@@ -67,10 +67,10 @@ contract AggregateStatsTest is Test, CoFheTest {
         euint32[] memory acc = template.initializeAccumulators(1, singleFieldParams);
 
         assertEq(acc.length, 4);
-        assertHashValue(acc[0], uint32(0));
-        assertHashValue(acc[1], type(uint32).max);
-        assertHashValue(acc[2], uint32(0));
-        assertHashValue(acc[3], uint32(0));
+        expectPlaintext(acc[0], uint32(0));
+        expectPlaintext(acc[1], type(uint32).max);
+        expectPlaintext(acc[2], uint32(0));
+        expectPlaintext(acc[3], uint32(0));
     }
 
     function test_InitializeAccumulators_MultiField() public {
@@ -102,10 +102,10 @@ contract AggregateStatsTest is Test, CoFheTest {
 
         acc = template.processSubmission(acc, values, valid, singleFieldParams);
 
-        assertHashValue(acc[0], uint32(100));
-        assertHashValue(acc[1], uint32(100));
-        assertHashValue(acc[2], uint32(100));
-        assertHashValue(acc[3], uint32(1));
+        expectPlaintext(acc[0], uint32(100));
+        expectPlaintext(acc[1], uint32(100));
+        expectPlaintext(acc[2], uint32(100));
+        expectPlaintext(acc[3], uint32(1));
     }
 
     function test_SingleInvalidSubmission_Excluded() public {
@@ -115,10 +115,10 @@ contract AggregateStatsTest is Test, CoFheTest {
 
         acc = template.processSubmission(acc, values, invalid, singleFieldParams);
 
-        assertHashValue(acc[0], uint32(0));
-        assertHashValue(acc[1], type(uint32).max);
-        assertHashValue(acc[2], uint32(0));
-        assertHashValue(acc[3], uint32(0));
+        expectPlaintext(acc[0], uint32(0));
+        expectPlaintext(acc[1], type(uint32).max);
+        expectPlaintext(acc[2], uint32(0));
+        expectPlaintext(acc[3], uint32(0));
     }
 
     // --- Multiple submissions ---
@@ -130,10 +130,10 @@ contract AggregateStatsTest is Test, CoFheTest {
         acc = template.processSubmission(acc, _makeFieldValues(100), _validBool(), singleFieldParams);
         acc = template.processSubmission(acc, _makeFieldValues(25), _validBool(), singleFieldParams);
 
-        assertHashValue(acc[0], uint32(175));
-        assertHashValue(acc[1], uint32(25));
-        assertHashValue(acc[2], uint32(100));
-        assertHashValue(acc[3], uint32(3));
+        expectPlaintext(acc[0], uint32(175));
+        expectPlaintext(acc[1], uint32(25));
+        expectPlaintext(acc[2], uint32(100));
+        expectPlaintext(acc[3], uint32(3));
     }
 
     function test_MixedValidInvalid() public {
@@ -143,10 +143,10 @@ contract AggregateStatsTest is Test, CoFheTest {
         acc = template.processSubmission(acc, _makeFieldValues(9999), _invalidBool(), singleFieldParams);
         acc = template.processSubmission(acc, _makeFieldValues(100), _validBool(), singleFieldParams);
 
-        assertHashValue(acc[0], uint32(150));
-        assertHashValue(acc[1], uint32(50));
-        assertHashValue(acc[2], uint32(100));
-        assertHashValue(acc[3], uint32(2));
+        expectPlaintext(acc[0], uint32(150));
+        expectPlaintext(acc[1], uint32(50));
+        expectPlaintext(acc[2], uint32(100));
+        expectPlaintext(acc[3], uint32(2));
     }
 
     // --- Finalization ---
@@ -162,11 +162,11 @@ contract AggregateStatsTest is Test, CoFheTest {
         euint32[] memory results = template.finalize(acc, validCount, singleFieldParams);
 
         assertEq(results.length, 5);
-        assertHashValue(results[0], uint32(180));
-        assertHashValue(results[1], uint32(40));
-        assertHashValue(results[2], uint32(80));
-        assertHashValue(results[3], uint32(60)); // mean = 180/3
-        assertHashValue(results[4], uint32(3));
+        expectPlaintext(results[0], uint32(180));
+        expectPlaintext(results[1], uint32(40));
+        expectPlaintext(results[2], uint32(80));
+        expectPlaintext(results[3], uint32(60)); // mean = 180/3
+        expectPlaintext(results[4], uint32(3));
     }
 
     // --- Multi-field ---
@@ -178,15 +178,15 @@ contract AggregateStatsTest is Test, CoFheTest {
         acc = template.processSubmission(acc, _makeFieldValues2(50, 300), _validBool(), multiFieldParams);
 
         // Field 0: sum=150, min=50, max=100
-        assertHashValue(acc[0], uint32(150));
-        assertHashValue(acc[1], uint32(50));
-        assertHashValue(acc[2], uint32(100));
+        expectPlaintext(acc[0], uint32(150));
+        expectPlaintext(acc[1], uint32(50));
+        expectPlaintext(acc[2], uint32(100));
         // Field 1: sum=500, min=200, max=300
-        assertHashValue(acc[3], uint32(500));
-        assertHashValue(acc[4], uint32(200));
-        assertHashValue(acc[5], uint32(300));
+        expectPlaintext(acc[3], uint32(500));
+        expectPlaintext(acc[4], uint32(200));
+        expectPlaintext(acc[5], uint32(300));
         // Count = 2
-        assertHashValue(acc[6], uint32(2));
+        expectPlaintext(acc[6], uint32(2));
     }
 
     // --- resultCount ---

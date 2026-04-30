@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.25;
 
-import {Test} from "forge-std/Test.sol";
-import {CoFheTest} from "@cofhe/mock-contracts/foundry/CoFheTest.sol";
+import {CofheTest} from "@cofhe/foundry-plugin/CofheTest.sol";
 import {FHE, euint32, ebool} from "@fhenixprotocol/cofhe-contracts/FHE.sol";
 import {RiskScoring} from "../../src/templates/RiskScoring.sol";
 
-contract RiskScoringTest is Test, CoFheTest {
+contract RiskScoringTest is CofheTest {
     RiskScoring public template;
 
     function setUp() public {
+        deployMocks();
         template = new RiskScoring();
     }
 
@@ -57,7 +57,7 @@ contract RiskScoringTest is Test, CoFheTest {
         bytes memory params = _params(0, 1, 1, 1, 1);
         euint32[] memory acc = template.initializeAccumulators(2, params);
         assertEq(acc.length, 1);
-        assertHashValue(acc[0], uint32(0));
+        expectPlaintext(acc[0], uint32(0));
     }
 
     function test_RevertsNoWeights() public {
@@ -87,7 +87,7 @@ contract RiskScoringTest is Test, CoFheTest {
         euint32[] memory acc = template.initializeAccumulators(2, params);
         acc = template.processSubmission(acc, _fields(10, 20), _validBool(), params);
         // weighted sum = 10*1 + 20*1 = 30
-        assertHashValue(acc[0], uint32(30));
+        expectPlaintext(acc[0], uint32(30));
     }
 
     function test_UnequalWeights() public {
@@ -96,14 +96,14 @@ contract RiskScoringTest is Test, CoFheTest {
         euint32[] memory acc = template.initializeAccumulators(2, params);
         acc = template.processSubmission(acc, _fields(10, 20), _validBool(), params);
         // weighted sum = 10*2 + 20*3 = 80
-        assertHashValue(acc[0], uint32(80));
+        expectPlaintext(acc[0], uint32(80));
     }
 
     function test_InvalidSubmission_Excluded() public {
         bytes memory params = _params(0, 1, 1, 1, 1);
         euint32[] memory acc = template.initializeAccumulators(2, params);
         acc = template.processSubmission(acc, _fields(10, 20), _invalidBool(), params);
-        assertHashValue(acc[0], uint32(0));
+        expectPlaintext(acc[0], uint32(0));
     }
 
     function test_MultipleValidSubmissions_Accumulate() public {
@@ -111,7 +111,7 @@ contract RiskScoringTest is Test, CoFheTest {
         euint32[] memory acc = template.initializeAccumulators(2, params);
         acc = template.processSubmission(acc, _fields(5, 10), _validBool(), params);  // 5+20 = 25
         acc = template.processSubmission(acc, _fields(3, 4), _validBool(), params);   // 3+8 = 11
-        assertHashValue(acc[0], uint32(36));
+        expectPlaintext(acc[0], uint32(36));
     }
 
     // --- Finalize ---
@@ -130,9 +130,9 @@ contract RiskScoringTest is Test, CoFheTest {
         euint32[] memory results = template.finalize(acc, vc, params);
         assertEq(results.length, 3);
         // average = 40 / (2 * 1) = 20
-        assertHashValue(results[0], uint32(20));
-        assertHashValue(results[1], uint32(40));
-        assertHashValue(results[2], uint32(2));
+        expectPlaintext(results[0], uint32(20));
+        expectPlaintext(results[1], uint32(40));
+        expectPlaintext(results[2], uint32(2));
     }
 
     function test_Finalize_WithDivisor() public {
@@ -147,8 +147,8 @@ contract RiskScoringTest is Test, CoFheTest {
 
         euint32[] memory results = template.finalize(acc, vc, params);
         // average = 100 / (1*10) = 10
-        assertHashValue(results[0], uint32(10));
-        assertHashValue(results[1], uint32(100));
+        expectPlaintext(results[0], uint32(10));
+        expectPlaintext(results[1], uint32(100));
     }
 
     function test_ResultCount() public view {
