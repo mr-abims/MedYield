@@ -10,6 +10,19 @@ export interface BountyField {
   type: FieldType;
 }
 
+export type ComputationOp =
+  | "average"
+  | "sum"
+  | "count"
+  | "eligibility"
+  | "risk-score";
+
+export interface BountyComputation {
+  op: ComputationOp;
+  outputLabel: string;
+  resultPolicy: string;
+}
+
 export type BountyStatus = "OPEN" | "COMPUTING" | "COMPLETED" | "EXPIRED";
 
 export interface Bounty {
@@ -21,6 +34,8 @@ export interface Bounty {
   fields: BountyField[];
   templateLabel: string;
   computeDescription: string;
+  computation: BountyComputation;
+  contractAddress: string;
   pricePerRecord: number;
   escrow: number;
   escrowUsed: number;
@@ -39,6 +54,19 @@ export interface Submission {
   bountyTitle: string;
   org: string;
   date: string;
+  timestamp: number;
   amount: number;
   status: SubmissionStatus;
+  walletAddress: string;
+  txHash?: string;
+  ciphertextHash?: string;
+  rangeProof?: string;
+  rejectionReason?: string;
+}
+
+export interface DraftSubmission {
+  bountyId: string;
+  values: Record<string, number | string>;
+  step: number;
+  updatedAt: number;
 }

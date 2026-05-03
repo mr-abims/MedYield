@@ -1,12 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useAccount, useSignMessage } from "wagmi";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import {
+  useAccount,
+  useChainId,
+  useSignMessage,
+  useSwitchChain,
+} from "wagmi";
+import { arbitrumSepolia } from "wagmi/chains";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import type { Bounty } from "@/lib/types";
-import { formatCountdown, truncateAddress } from "@/lib/utils";
+import {
+  arbiscanTx,
+  arbiscanAddress,
+  cn,
+  formatCountdown,
+  randomHex,
+  truncateAddress,
+  truncateHash,
+} from "@/lib/utils";
 import { useAppStore } from "@/lib/store";
-import { cn } from "@/lib/utils";
+import toast from "react-hot-toast";
 
 interface Props {
   bounty: Bounty | null;
@@ -23,23 +38,34 @@ export function SubmitDrawer({ bounty, onClose }: Props) {
     };
   }, [bounty]);
 
+  // Esc to close
+  useEffect(() => {
+    if (!bounty) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [bounty, onClose]);
+
   if (!bounty) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-end">
+    <div className="fixed inset-0 z-[100] flex items-stretch sm:items-center justify-end">
       <div
         onClick={onClose}
         className="absolute inset-0 bg-foreground/35 backdrop-blur-[2px]"
       />
       <div
-        className="relative z-[1] w-[480px] max-w-full h-screen bg-surface overflow-y-auto px-8 pt-8 pb-10 shadow-drawer animate-slide-in"
+        className="relative z-[1] w-full sm:w-[480px] sm:max-w-full h-[100dvh] bg-surface overflow-y-auto px-5 sm:px-8 pt-7 sm:pt-8 pb-8 sm:pb-10 shadow-drawer animate-slide-in"
         role="dialog"
         aria-modal
+        aria-labelledby="submit-drawer-title"
       >
         <button
           onClick={onClose}
           aria-label="Close"
-          className="absolute top-5 right-5 w-8 h-8 rounded-full border-[1.5px] border-border bg-surface flex items-center justify-center text-muted text-base leading-none hover:border-accent hover:text-accent transition-colors"
+          className="absolute top-4 right-4 sm:top-5 sm:right-5 w-9 h-9 rounded-full border-[1.5px] border-border bg-surface flex items-center justify-center text-muted text-lg leading-none hover:border-accent hover:text-accent transition-colors"
         >
           ×
         </button>
@@ -51,36 +77,58 @@ export function SubmitDrawer({ bounty, onClose }: Props) {
 }
 
 function DrawerBody({ bounty, onClose }: { bounty: Bounty; onClose: () => void }) {
-  const { isConnected } = useAccount();
-  const [step, setStep] = useState(0);
-  const addSubmission = useAppStore((s) => s.addSubmission);
+  const { isConnected, address } = useAccount();
+  const chainId = useChainId();
+  const wrongNetwork = isConnected && chainId !== arbitrumSepolia.id;
 
-  const handleComplete = () => {
-    addSubmission(bounty);
+  const hasSubmitted = useAppStore((s) => s.hasSubmitted);
+  const getDraft = useAppStore((s) => s.getDraft);
+  const saveDraft = useAppStore((s) => s.saveDraft);
+  const clearDraft = useAppStore((s) => s.clearDraft);
+
+  const alreadySubmitted = hasSubmitted(address, bounty.id);
+
+  // Restore draft (form values + step)
+  const draft = getDraft(address, bounty.id);
+  const [step, setStep] = useState<number>(draft?.step ?? 0);
+  const [values, setValues] = useState<Record<string, number | string>>(
+    draft?.values ?? {},
+  );
+
+  // Persist draft on every change (debounced via microtask)
+  useEffect(() => {
+    if (!address) return;
+    if (alreadySubmitted) return;
+    if (step >= 2) return; // stop saving after encryption begins
+    saveDraft(address, bounty.id, values, step);
+  }, [address, bounty.id, values, step, saveDraft, alreadySubmitted]);
+
+  if (!isConnected) return <StepConnect />;
+  if (wrongNetwork) return <StepWrongNetwork />;
+  if (alreadySubmitted) return <StepAlreadyDone bounty={bounty} onClose={onClose} />;
+
+  const goNext = () => setStep((s) => s + 1);
+  const goBack = () => setStep((s) => Math.max(0, s - 1));
+  const onComplete = () => {
+    if (address) clearDraft(address, bounty.id);
     onClose();
   };
 
-  if (!isConnected) return <StepConnect />;
-
   return (
     <>
-      {step === 0 && <StepOverview bounty={bounty} onNext={() => setStep(1)} />}
+      {step === 0 && <StepOverview bounty={bounty} onNext={goNext} />}
       {step === 1 && (
         <StepForm
           bounty={bounty}
-          onBack={() => setStep(0)}
-          onNext={() => setStep(2)}
+          values={values}
+          onChange={setValues}
+          onBack={goBack}
+          onNext={goNext}
         />
       )}
-      {step === 2 && (
-        <StepEncrypting bounty={bounty} onNext={() => setStep(3)} />
-      )}
+      {step === 2 && <StepEncrypting bounty={bounty} onNext={goNext} />}
       {step === 3 && (
-        <StepConfirm
-          bounty={bounty}
-          onBack={() => setStep(1)}
-          onSubmit={handleComplete}
-        />
+        <StepConfirm bounty={bounty} onBack={() => setStep(1)} onSubmit={onComplete} />
       )}
     </>
   );
@@ -92,7 +140,10 @@ function StepConnect() {
       <div className="text-[11px] font-bold tracking-[0.08em] text-accent mb-2 uppercase">
         Wallet required
       </div>
-      <h2 className="font-display text-[26px] font-medium text-foreground mb-2.5">
+      <h2
+        id="submit-drawer-title"
+        className="font-display text-[24px] sm:text-[26px] font-medium text-foreground mb-2.5"
+      >
         Connect your wallet to continue
       </h2>
       <p className="text-sm text-muted leading-[1.65] mb-6">
@@ -113,18 +164,85 @@ function StepConnect() {
         </div>
       </div>
 
-      <div className="flex justify-center">
-        <ConnectButton.Custom>
-          {({ openConnectModal, mounted }) => (
-            <button
-              onClick={openConnectModal}
-              disabled={!mounted}
-              className="w-full py-[13px] rounded-[10px] bg-accent text-white text-sm font-semibold hover:opacity-90 transition-opacity tracking-wide disabled:opacity-50"
-            >
-              Connect wallet →
-            </button>
-          )}
-        </ConnectButton.Custom>
+      <ConnectButton.Custom>
+        {({ openConnectModal, mounted }) => (
+          <button
+            onClick={openConnectModal}
+            disabled={!mounted}
+            className="w-full py-[13px] rounded-[10px] bg-accent text-white text-sm font-semibold hover:opacity-90 transition-opacity tracking-wide disabled:opacity-50"
+          >
+            Connect wallet →
+          </button>
+        )}
+      </ConnectButton.Custom>
+    </div>
+  );
+}
+
+function StepWrongNetwork() {
+  const { switchChain, isPending } = useSwitchChain();
+  return (
+    <div className="pt-2">
+      <div className="text-[11px] font-bold tracking-[0.08em] text-[#92400e] mb-2 uppercase">
+        Wrong network
+      </div>
+      <h2
+        id="submit-drawer-title"
+        className="font-display text-[24px] sm:text-[26px] font-medium text-foreground mb-2.5"
+      >
+        Switch to Arbitrum Sepolia
+      </h2>
+      <p className="text-sm text-muted leading-[1.65] mb-6">
+        MedYield bounties live on Arbitrum Sepolia. Switch your wallet to that
+        network to submit and get paid.
+      </p>
+      <button
+        onClick={() => switchChain({ chainId: arbitrumSepolia.id })}
+        disabled={isPending}
+        className="w-full py-[13px] rounded-[10px] bg-accent text-white text-sm font-semibold hover:opacity-90 transition-opacity tracking-wide disabled:opacity-50"
+      >
+        {isPending ? "Switching…" : "Switch network →"}
+      </button>
+    </div>
+  );
+}
+
+function StepAlreadyDone({
+  bounty,
+  onClose,
+}: {
+  bounty: Bounty;
+  onClose: () => void;
+}) {
+  return (
+    <div className="text-center pt-6">
+      <div className="w-[72px] h-[72px] rounded-full bg-accent-light flex items-center justify-center mx-auto mb-5">
+        <ShieldIcon size={36} />
+      </div>
+      <h2
+        id="submit-drawer-title"
+        className="font-display text-2xl font-medium text-foreground mb-2"
+      >
+        You&apos;ve already contributed
+      </h2>
+      <p className="text-[13px] text-muted leading-[1.6] mb-6">
+        This wallet has already submitted to <strong>{bounty.title}</strong>.
+        Each wallet can only contribute once per bounty.
+      </p>
+      <div className="flex flex-col gap-2.5">
+        <Link
+          href="/earnings"
+          onClick={onClose}
+          className="w-full py-[13px] rounded-[10px] bg-accent text-white text-sm font-semibold hover:opacity-90 transition-opacity tracking-wide"
+        >
+          View in earnings →
+        </Link>
+        <button
+          onClick={onClose}
+          className="w-full py-[11px] rounded-[10px] border-[1.5px] border-border text-[13px] text-muted hover:border-accent hover:text-accent transition-colors"
+        >
+          Browse other bounties
+        </button>
       </div>
     </div>
   );
@@ -210,12 +328,13 @@ function StepOverview({
       <div className="text-[11px] font-bold tracking-[0.08em] text-accent mb-2 uppercase">
         About this study
       </div>
-      <h2 className="font-display text-[26px] font-medium text-foreground mb-2">
+      <h2
+        id="submit-drawer-title"
+        className="font-display text-[22px] sm:text-[26px] font-medium text-foreground mb-2"
+      >
         {bounty.title}
       </h2>
-      <p className="text-sm text-muted leading-[1.65] mb-6">
-        {bounty.description}
-      </p>
+      <p className="text-sm text-muted leading-[1.65] mb-5">{bounty.description}</p>
 
       <div className="mb-5">
         <div className="text-[11px] font-bold tracking-wider text-placeholder mb-2.5 uppercase">
@@ -252,31 +371,32 @@ function StepOverview({
           <div className="text-[13px] text-foreground-soft leading-[1.55]">
             {bounty.computeDescription}
           </div>
+          <div className="text-[11px] text-foreground-soft/70 mt-1.5">
+            Computation: <strong>{bounty.computation.outputLabel}</strong>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2.5 mb-7">
+      <div className="grid grid-cols-3 gap-2 sm:gap-2.5 mb-6">
         {[
           {
             label: "You earn",
             value: `$${bounty.pricePerRecord.toFixed(2)}`,
           },
-          {
-            label: "Closes in",
-            value: formatCountdown(bounty.deadline),
-          },
+          { label: "Closes in", value: formatCountdown(bounty.deadline) },
           {
             label: "Slots left",
-            value: (
-              bounty.maxSubmissions - bounty.validatedSubmissions
+            value: Math.max(
+              bounty.maxSubmissions - bounty.validatedSubmissions,
+              0,
             ).toLocaleString(),
           },
         ].map((item) => (
           <div
             key={item.label}
-            className="px-3.5 py-3 rounded-[10px] bg-bg border border-border text-center"
+            className="px-3 py-3 rounded-[10px] bg-bg border border-border text-center"
           >
-            <div className="font-display text-lg font-medium text-foreground">
+            <div className="font-display text-base sm:text-lg font-medium text-foreground">
               {item.value}
             </div>
             <div className="text-[11px] text-placeholder mt-0.5">
@@ -285,6 +405,15 @@ function StepOverview({
           </div>
         ))}
       </div>
+
+      <a
+        href={arbiscanAddress(bounty.contractAddress)}
+        target="_blank"
+        rel="noreferrer"
+        className="block text-center text-[11px] text-placeholder hover:text-accent transition-colors mb-4"
+      >
+        Escrow contract: {truncateAddress(bounty.contractAddress, 6, 6)} ↗
+      </a>
 
       <button
         onClick={onNext}
@@ -298,18 +427,31 @@ function StepOverview({
 
 function StepForm({
   bounty,
+  values,
+  onChange,
   onBack,
   onNext,
 }: {
   bounty: Bounty;
+  values: Record<string, number | string>;
+  onChange: (next: Record<string, number | string>) => void;
   onBack: () => void;
   onNext: () => void;
 }) {
-  const [values, setValues] = useState<Record<string, number | string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [outOfRange, setOutOfRange] = useState(false);
+  const firstInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    firstInputRef.current?.focus();
+  }, []);
+
+  const update = (name: string, v: number | string) =>
+    onChange({ ...values, [name]: v });
 
   const submit = () => {
     const errs: Record<string, string> = {};
+    let anyOutOfRange = false;
     bounty.fields.forEach((f) => {
       const v = values[f.name];
       if (v === undefined || v === "") {
@@ -324,26 +466,36 @@ function StepForm({
         }
         if (num < f.min || num > f.max) {
           errs[f.name] = `Must be between ${f.min} and ${f.max} ${f.unit}`;
+          anyOutOfRange = true;
         }
       }
     });
     setErrors(errs);
+    setOutOfRange(anyOutOfRange);
     if (Object.keys(errs).length === 0) onNext();
   };
 
   return (
-    <div>
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+    >
       <StepIndicator step={1} total={4} />
-      <h2 className="font-display text-2xl font-medium text-foreground mb-1.5">
+      <h2
+        id="submit-drawer-title"
+        className="font-display text-2xl font-medium text-foreground mb-1.5"
+      >
         Enter your data
       </h2>
       <p className="text-[13px] text-muted mb-6 leading-[1.55]">
         Your values are validated against the allowed ranges in your browser,
-        then encrypted before anything is sent.
+        then encrypted before anything is sent. Your draft is auto-saved.
       </p>
 
-      <div className="flex flex-col gap-3.5 mb-7">
-        {bounty.fields.map((f) => {
+      <div className="flex flex-col gap-3.5 mb-5">
+        {bounty.fields.map((f, i) => {
           const err = errors[f.name];
           const isBool = f.type === "boolean";
           return (
@@ -361,10 +513,9 @@ function StepForm({
                     const selected = values[f.name] === val;
                     return (
                       <button
+                        type="button"
                         key={opt}
-                        onClick={() =>
-                          setValues((v) => ({ ...v, [f.name]: val }))
-                        }
+                        onClick={() => update(f.name, val)}
                         className={cn(
                           "flex-1 py-2.5 rounded-lg text-[13px] font-semibold transition-all border-[1.5px]",
                           selected
@@ -379,12 +530,11 @@ function StepForm({
                 </div>
               ) : (
                 <input
+                  ref={i === 0 ? firstInputRef : null}
                   type="number"
                   inputMode="decimal"
                   value={values[f.name] ?? ""}
-                  onChange={(e) =>
-                    setValues((v) => ({ ...v, [f.name]: e.target.value }))
-                  }
+                  onChange={(e) => update(f.name, e.target.value)}
                   placeholder={`e.g. ${Math.round((f.min + f.max) / 2)}`}
                   className={cn(
                     "no-spinners w-full px-3 py-2.5 rounded-lg text-sm text-foreground bg-surface outline-none transition-colors border-[1.5px] focus:border-accent",
@@ -400,21 +550,40 @@ function StepForm({
         })}
       </div>
 
+      {outOfRange && (
+        <div className="rounded-[10px] bg-status-error-bg border border-[#fecaca] p-3.5 mb-5">
+          <div className="text-[12px] font-semibold text-status-error-fg mb-1">
+            Heads up: some values are outside the study&apos;s eligibility band.
+          </div>
+          <div className="text-[12px] text-status-error-fg leading-[1.5]">
+            Adjust to the listed range to participate, or browse{" "}
+            <Link
+              href="/marketplace"
+              className="underline hover:no-underline font-semibold"
+            >
+              other bounties
+            </Link>{" "}
+            you may qualify for.
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-2.5">
         <button
+          type="button"
           onClick={onBack}
           className="w-20 py-3 rounded-[10px] border-[1.5px] border-border text-muted text-sm hover:border-accent hover:text-accent transition-colors"
         >
           ← Back
         </button>
         <button
-          onClick={submit}
+          type="submit"
           className="flex-1 py-3 rounded-[10px] bg-accent text-white text-sm font-semibold hover:opacity-90 transition-opacity"
         >
-          Encrypt & preview →
+          Encrypt &amp; preview →
         </button>
       </div>
-    </div>
+    </form>
   );
 }
 
@@ -444,10 +613,7 @@ function StepEncrypting({
           if (cancelled) return;
           const f = fields[i];
           setDone((d) => [...d, f.name]);
-          setHashes((h) => ({
-            ...h,
-            [f.name]: "0x" + Math.random().toString(16).slice(2, 8) + "…",
-          }));
+          setHashes((h) => ({ ...h, [f.name]: randomHex(8) }));
           setProgress(Math.round(((i + 1) / fields.length) * 90));
           i++;
           tick();
@@ -481,7 +647,10 @@ function StepEncrypting({
         >
           <ShieldIcon size={36} />
         </div>
-        <h2 className="font-display text-2xl font-medium text-foreground mb-2">
+        <h2
+          id="submit-drawer-title"
+          className="font-display text-2xl font-medium text-foreground mb-2"
+        >
           {progress < 100 ? "Encrypting your data…" : "Encryption complete"}
         </h2>
         <p className="text-[13px] text-muted leading-[1.55] mb-3.5">
@@ -568,7 +737,7 @@ function StepEncrypting({
                   isDone ? "text-placeholder" : "text-faint",
                 )}
               >
-                {isDone ? hashes[f.name] ?? "" : "—"}
+                {isDone ? truncateHash(hashes[f.name] ?? "", 6, 4) : "—"}
               </span>
             </div>
           );
@@ -589,12 +758,21 @@ function StepConfirm({
 }) {
   const { address } = useAccount();
   const { signMessageAsync } = useSignMessage();
+  const addSubmission = useAppStore((s) => s.addSubmission);
   const [state, setState] = useState<
     "idle" | "confirming" | "pending" | "done" | "error"
   >("idle");
   const [error, setError] = useState<string | null>(null);
+  const [txHash, setTxHash] = useState<string>("");
+  const [ciphertextHash, setCiphertextHash] = useState<string>("");
+  const [rangeProof, setRangeProof] = useState<string>("");
+
+  // Pre-generate stable hashes so the confirm view and final receipt agree.
+  const [previewCiphertextHash] = useState(() => randomHex(32));
+  const [previewRangeProof] = useState(() => randomHex(16));
 
   const handle = async () => {
+    if (!address) return;
     setError(null);
     setState("confirming");
     try {
@@ -602,13 +780,27 @@ function StepConfirm({
         `MedYield submission\n` +
         `Bounty: ${bounty.title} (${bounty.id})\n` +
         `Org: ${bounty.org}\n` +
+        `Contract: ${bounty.contractAddress}\n` +
+        `Ciphertext: ${previewCiphertextHash}\n` +
         `Payout: $${bounty.pricePerRecord.toFixed(2)} USDC\n` +
         `Submitted at: ${new Date().toISOString()}`;
       await signMessageAsync({ message });
       setState("pending");
       setTimeout(() => {
+        const tx = randomHex(32);
+        setTxHash(tx);
+        setCiphertextHash(previewCiphertextHash);
+        setRangeProof(previewRangeProof);
+        addSubmission({
+          bounty,
+          walletAddress: address,
+          txHash: tx,
+          ciphertextHash: previewCiphertextHash,
+          rangeProof: previewRangeProof,
+          status: "paid",
+        });
+        toast.success(`Paid $${bounty.pricePerRecord.toFixed(2)} USDC`);
         setState("done");
-        setTimeout(onSubmit, 1200);
       }, 2200);
     } catch (err) {
       const msg =
@@ -622,7 +814,7 @@ function StepConfirm({
 
   if (state === "done") {
     return (
-      <div className="text-center py-5">
+      <div className="text-center py-3">
         <div className="w-[72px] h-[72px] rounded-full bg-accent-light flex items-center justify-center mx-auto mb-5">
           <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
             <path
@@ -634,10 +826,13 @@ function StepConfirm({
             />
           </svg>
         </div>
-        <h2 className="font-display text-[26px] font-medium text-foreground mb-2">
+        <h2
+          id="submit-drawer-title"
+          className="font-display text-[24px] sm:text-[26px] font-medium text-foreground mb-2"
+        >
           Validated &amp; paid!
         </h2>
-        <p className="text-sm text-muted leading-[1.6]">
+        <p className="text-sm text-muted leading-[1.6] mb-5">
           Your encrypted submission passed the range check.
           <br />
           <strong className="text-accent">
@@ -645,6 +840,39 @@ function StepConfirm({
           </strong>{" "}
           has been released to your wallet.
         </p>
+
+        <div className="rounded-[12px] border border-border bg-bg p-4 text-left mb-5 flex flex-col gap-2">
+          <ProofRow
+            label="Tx hash"
+            value={truncateHash(txHash, 10, 8)}
+            href={arbiscanTx(txHash)}
+          />
+          <ProofRow
+            label="Ciphertext"
+            value={truncateHash(ciphertextHash, 10, 8)}
+          />
+          <ProofRow
+            label="Range proof"
+            value={truncateHash(rangeProof, 10, 8)}
+          />
+        </div>
+
+        <div className="flex flex-col gap-2.5">
+          <Link
+            href="/earnings"
+            onClick={onSubmit}
+            className="w-full py-[13px] rounded-[10px] bg-accent text-white text-sm font-semibold hover:opacity-90 transition-opacity tracking-wide"
+          >
+            View earnings →
+          </Link>
+          <Link
+            href="/marketplace"
+            onClick={onSubmit}
+            className="w-full py-[11px] rounded-[10px] border-[1.5px] border-border text-[13px] text-muted hover:border-accent hover:text-accent transition-colors"
+          >
+            Submit to another study
+          </Link>
+        </div>
       </div>
     );
   }
@@ -664,7 +892,10 @@ function StepConfirm({
             />
           </svg>
         </div>
-        <h2 className="font-display text-2xl font-medium text-foreground mb-2">
+        <h2
+          id="submit-drawer-title"
+          className="font-display text-2xl font-medium text-foreground mb-2"
+        >
           Awaiting validation
         </h2>
         <p className="text-[13px] text-muted leading-[1.6] mb-4">
@@ -705,7 +936,10 @@ function StepConfirm({
             <circle cx="16" cy="21" r="2" fill="#059669" />
           </svg>
         </div>
-        <h2 className="font-display text-2xl font-medium text-foreground mb-2">
+        <h2
+          id="submit-drawer-title"
+          className="font-display text-2xl font-medium text-foreground mb-2"
+        >
           Confirm in wallet
         </h2>
         <p className="text-[13px] text-muted">
@@ -728,7 +962,10 @@ function StepConfirm({
             />
           </svg>
         </div>
-        <h2 className="font-display text-2xl font-medium text-foreground mb-2">
+        <h2
+          id="submit-drawer-title"
+          className="font-display text-2xl font-medium text-foreground mb-2"
+        >
           Signature declined
         </h2>
         <p className="text-[13px] text-muted mb-5 leading-[1.6]">
@@ -756,7 +993,10 @@ function StepConfirm({
   return (
     <div>
       <StepIndicator step={3} total={4} />
-      <h2 className="font-display text-2xl font-medium text-foreground mb-1.5">
+      <h2
+        id="submit-drawer-title"
+        className="font-display text-2xl font-medium text-foreground mb-1.5"
+      >
         Ready to submit
       </h2>
       <p className="text-[13px] text-muted mb-6 leading-[1.55]">
@@ -767,7 +1007,7 @@ function StepConfirm({
       <div className="p-4 rounded-[12px] bg-bg border border-border mb-5">
         <div className="flex justify-between items-center mb-2.5">
           <span className="text-xs text-muted">Bounty</span>
-          <span className="text-[13px] font-medium text-foreground">
+          <span className="text-[13px] font-medium text-foreground text-right">
             {bounty.title}
           </span>
         </div>
@@ -775,6 +1015,12 @@ function StepConfirm({
           <span className="text-xs text-muted">Fields encrypted</span>
           <span className="text-[13px] font-medium text-foreground">
             {bounty.fields.length} fields
+          </span>
+        </div>
+        <div className="flex justify-between items-center mb-2.5">
+          <span className="text-xs text-muted">Ciphertext</span>
+          <span className="text-[12px] font-mono text-foreground-soft">
+            {truncateHash(previewCiphertextHash, 6, 6)}
           </span>
         </div>
         {address && (
@@ -838,6 +1084,38 @@ function StepConfirm({
           Submit encrypted data ↗
         </button>
       </div>
+    </div>
+  );
+}
+
+function ProofRow({
+  label,
+  value,
+  href,
+}: {
+  label: string;
+  value: string;
+  href?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-[11px] text-placeholder uppercase tracking-wider">
+        {label}
+      </span>
+      {href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          className="font-mono text-[12px] text-accent hover:underline"
+        >
+          {value} ↗
+        </a>
+      ) : (
+        <span className="font-mono text-[12px] text-foreground-soft">
+          {value}
+        </span>
+      )}
     </div>
   );
 }

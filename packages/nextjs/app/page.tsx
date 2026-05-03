@@ -83,15 +83,15 @@ export default function LandingPage() {
       <section className="relative overflow-hidden pt-[66px]">
         <div className="absolute inset-0 opacity-[0.03] dot-grid" />
         <div className="absolute bottom-0 left-0 right-0 h-[100px] bg-gradient-to-t from-bg to-transparent" />
-        <div className="max-w-[1100px] mx-auto px-6 pt-[72px] pb-24 flex items-center gap-[60px] relative z-[1]">
+        <div className="max-w-[1100px] mx-auto px-4 sm:px-6 pt-10 sm:pt-[72px] pb-16 sm:pb-24 flex flex-col md:flex-row items-center gap-10 md:gap-[60px] relative z-[1]">
           <div className="flex-1 min-w-0">
-            <div className="inline-flex items-center gap-[7px] px-3 py-[5px] rounded-pill bg-accent-light mb-[22px]">
+            <div className="inline-flex items-center gap-[7px] px-3 py-[5px] rounded-pill bg-accent-light mb-5 sm:mb-[22px]">
               <div className="w-1.5 h-1.5 rounded-full bg-accent" />
               <span className="text-[11px] font-semibold text-accent tracking-wide">
                 Powered by Fully Homomorphic Encryption
               </span>
             </div>
-            <h1 className="font-display text-[52px] font-medium text-foreground leading-[1.13] mb-5 tracking-tight">
+            <h1 className="font-display text-[36px] sm:text-[44px] md:text-[52px] font-medium text-foreground leading-[1.13] mb-5 tracking-tight">
               Earn from your
               <br />
               health data.
@@ -100,7 +100,7 @@ export default function LandingPage() {
               <br />
               Always.
             </h1>
-            <p className="text-base text-muted leading-[1.75] mb-9 max-w-[440px]">
+            <p className="text-[15px] sm:text-base text-muted leading-[1.75] mb-7 sm:mb-9 max-w-[440px]">
               Researchers post paid bounties. You submit encrypted health data
               directly from your browser. Your raw values never touch a server —
               math runs on the ciphertext.
@@ -108,34 +108,40 @@ export default function LandingPage() {
             <div className="flex gap-3 flex-wrap">
               <Link
                 href="/marketplace"
-                className="px-7 py-[13px] rounded-[10px] bg-accent text-white text-[15px] font-semibold hover:opacity-90 transition-opacity"
+                className="px-6 sm:px-7 py-[12px] sm:py-[13px] rounded-[10px] bg-accent text-white text-[14px] sm:text-[15px] font-semibold hover:opacity-90 transition-opacity"
               >
                 Browse bounties →
               </Link>
               <Link
                 href="/org"
-                className="px-7 py-[13px] rounded-[10px] border-[1.5px] border-border bg-surface text-foreground-soft text-[15px] font-medium hover:border-accent transition-colors"
+                className="px-6 sm:px-7 py-[12px] sm:py-[13px] rounded-[10px] border-[1.5px] border-border bg-surface text-foreground-soft text-[14px] sm:text-[15px] font-medium hover:border-accent transition-colors"
               >
                 Post a bounty
               </Link>
             </div>
           </div>
-          <HeroEncryptViz />
+          <div className="hidden md:block">
+            <HeroEncryptViz />
+          </div>
         </div>
       </section>
 
       {/* Stats */}
       <section className="bg-surface border-y border-border">
-        <div className="max-w-[900px] mx-auto grid grid-cols-4">
+        <div className="max-w-[900px] mx-auto grid grid-cols-2 md:grid-cols-4">
           {STATS.map((s, i) => (
             <div
               key={s.label}
-              className={`px-4 py-6 text-center ${i < STATS.length - 1 ? "border-r border-border" : ""}`}
+              className={`px-4 py-5 sm:py-6 text-center ${
+                i < STATS.length - 1 ? "md:border-r border-border" : ""
+              } ${i % 2 === 0 ? "border-r md:border-r" : ""} ${
+                i < 2 ? "border-b md:border-b-0" : ""
+              }`}
             >
-              <div className="font-display text-4xl font-medium text-foreground leading-none">
+              <div className="font-display text-3xl sm:text-4xl font-medium text-foreground leading-none">
                 {s.value}
               </div>
-              <div className="text-[13px] font-semibold text-foreground-soft mt-1.5">
+              <div className="text-[12px] sm:text-[13px] font-semibold text-foreground-soft mt-1.5">
                 {s.label}
               </div>
               <div className="text-[11px] text-placeholder mt-0.5">{s.sub}</div>
@@ -145,12 +151,12 @@ export default function LandingPage() {
       </section>
 
       {/* How it works */}
-      <section className="max-w-[1100px] mx-auto px-6 py-20">
+      <section className="max-w-[1100px] mx-auto px-4 sm:px-6 py-14 sm:py-20">
         <div className="text-center mb-14">
           <div className="text-xs font-bold tracking-[0.1em] text-accent mb-2.5 uppercase">
             How it works
           </div>
-          <h2 className="font-display text-[38px] font-medium text-foreground m-0">
+          <h2 className="font-display text-[28px] sm:text-[38px] font-medium text-foreground m-0">
             Two sides. One encrypted vault.
           </h2>
         </div>
@@ -239,12 +245,12 @@ export default function LandingPage() {
       </section>
 
       {/* Privacy guarantee — dark */}
-      <section className="bg-dark-surface py-20 px-6">
+      <section className="bg-dark-surface py-14 sm:py-20 px-4 sm:px-6">
         <div className="max-w-[800px] mx-auto text-center">
           <div className="text-xs font-bold tracking-[0.1em] text-accent mb-4 uppercase">
             The privacy guarantee
           </div>
-          <h2 className="font-display text-4xl font-medium text-[#faf8f5] leading-tight mb-5">
+          <h2 className="font-display text-[28px] sm:text-4xl font-medium text-[#faf8f5] leading-tight mb-5">
             Your data is never decrypted.
             <br />
             Not once. Not ever.
@@ -275,8 +281,8 @@ export default function LandingPage() {
       </section>
 
       {/* Footer CTA */}
-      <section className="max-w-[1100px] mx-auto px-6 py-20 text-center">
-        <h2 className="font-display text-[40px] font-medium text-foreground mb-4">
+      <section className="max-w-[1100px] mx-auto px-4 sm:px-6 py-14 sm:py-20 text-center">
+        <h2 className="font-display text-[30px] sm:text-[40px] font-medium text-foreground mb-4">
           Ready to get started?
         </h2>
         <p className="text-base text-muted mb-9">
